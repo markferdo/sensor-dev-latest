@@ -75,7 +75,7 @@ int uart_read_line(char *buf, size_t max_len)
                 buf[index] = '\0';   // terminate string
                 return index;        // return length
             }
-            buf[index++] = byte;
+            buf[index++] = byte; // check how this gonna make the final message
         }
     }
 
@@ -88,7 +88,7 @@ int uart_read_line(char *buf, size_t max_len)
 DeviceCredentials parse_json(const char* json_str) {
     DeviceCredentials creds;
 
-    cJSON* root = cJSON_Parse(json_str);
+    cJSON* root = cJSON_Parse(json_str); // check what is root and how it can return a bool
     if (!root) {
         ESP_LOGE("JSON", "Failed to parse JSON");
         return creds;

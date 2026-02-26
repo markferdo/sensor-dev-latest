@@ -3,7 +3,7 @@
     
 static const char *TAG = "tasks";
 
-void uart_task(void *pvParameters)
+void uart_task(void *param)
 {
     char rx_buf[BUF_SIZE];
     ESP_LOGI("UART_TASK", "UART task started");
