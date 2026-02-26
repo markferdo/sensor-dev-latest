@@ -6,7 +6,7 @@ import time
 # Plug the device and run the backend chirpstack server to generate the key. Once it generates the key run the python script to save keys into nvs
 
 #uncomment these two and comment dummy data to fetch keys from the server
-#response = requests.get("http://192.168.112.11:3000//api/latest-device") // replace with your server IP
+#response = requests.get("http://192.168.112.11:3000//api/latest-device") # replace with your server IP
 #data = response.json()  # devEui, joinEui, appKey
 
 # Dummy data for testing
@@ -21,8 +21,8 @@ def run_serial_bridge():
     
     while True:
         try:
-            print(f"--- Attempting to connect to /dev/ttyACM1 ---")
-            ser = serial.Serial('/dev/ttyACM0', 115200, timeout=0.1)
+            print(f"--- Attempting to connect to /dev/ttyACM* ---")
+            ser = serial.Serial('/dev/ttyACM0', 115200, timeout=0.1) # change the port
             ser.dsrdtr = False
             ser.rtscts = False
             ser.setDTR(False)
