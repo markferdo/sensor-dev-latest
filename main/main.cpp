@@ -1,113 +1,205 @@
 #include <stdio.h>
-#include <stdbool.h>
-#include "driver/usb_serial_jtag.h"
-#include "sdkconfig.h"
-#include "freertos/task.h"
-#include "freertos/FreeRTOS.h"
 #include <string.h>
-#include "device/device_setup.h"
-#include "freertos/queue.h"
-#include "driver/uart.h"
-#include "esp_log.h"
-#include "tasks.h"
+#include <inttypes.h>
+#include <stdlib.h>
 
-#define RX_BUF_SIZE 128
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 
-// Simple device name variable
-static char device_name[64] = "ESP32-S3-Device";
+#include "esp_system.h"
+#include "nvs_flash.h"
+#include "isd-nvs.h"
 
+#include "driver/usb_serial_jtag.h"
 
-// ---- Command Handler ----
-void handle_command(char *cmd)
+#define BUF_SIZE 256
+
+// Persistent variables
+char g_app_key[32] = {0};
+uint8_t g_com_freq = 0;
+
+/* ---------------------------------------------------------- */
+/* Load config from NVS */
+/* ---------------------------------------------------------- */
+void loadConfig()
 {
-    if (strcmp(cmd, "help") == 0) {
+    size_t len;
+
+    len = sizeof(g_app_key);
+    if (Storage::readValue("config", "appkey",
+                           NvsDataType::STR,
+                           g_app_key,
+                           &len) != ESP_OK)
+    {
+        strcpy(g_app_key, "not_set");
+    }
+
+    if (Storage::readValue("config", "comfreq",
+                           NvsDataType::I64,
+                           &g_com_freq,
+                           nullptr) != ESP_OK)
+    {
+        g_com_freq = 0;
+    }
+
+    printf("\nLoaded config:\n");
+    printf("app key: %s\n", g_app_key);
+    printf("communication frequency: %" PRId64 "\n\n", g_com_freq);
+}
+
+/* ---------------------------------------------------------- */
+/* Save functions */
+/* ---------------------------------------------------------- */
+void saveAppKey(const char* value)
+{
+    strncpy(g_app_key, value, sizeof(g_app_key) - 1);
+    g_app_key[sizeof(g_app_key) - 1] = '\0';
+
+    Storage::writeValue("config",
+                        "appkey",
+                        NvsDataType::STR,
+                        g_app_key,
+                        0);
+
+    printf("app key saved.\n");
+}
+
+void saveFreq(uint8_t value)
+{
+    g_com_freq = value;
+
+    Storage::writeValue("config",
+                        "comfreq",
+                        NvsDataType::I64,
+                        &g_com_freq,
+                        0);
+
+    printf("frequency saved.\n");
+}
+
+
+bool processCommand(char* cmd)
+{
+    cmd[strcspn(cmd, "\r\n")] = 0;
+
+    if (strncmp(cmd, "set-appkey ", 8) == 0)
+    {
+        saveAppKey(cmd + 8);
+    }
+    else if (strncmp(cmd, "set-freq ", 8) == 0)
+    {
+        uint8_t val = atoll(cmd + 8);
+        saveFreq(val);
+    }
+    else if (strcmp(cmd, "show") == 0)
+    {
+        printf("app key: %s\n", g_app_key);
+        printf("communication frequency: %" PRId64 " minutes\n", g_com_freq);
+    }
+    else if (strcmp(cmd, "help") == 0)
+    {
         printf("\nAvailable commands:\n");
-        printf("help               - Show this message\n");
-        printf("name               - Show current device name\n");
-        printf("setname <value>    - Set new device name\n\n");
+        printf("  set-appkey <value>    : Set appkey string\n");
+        printf("  set-freq <value>   : Set communication frequency (in minutes)\n");
+        printf("  show               : Show current stored values\n");
+        printf("  help               : Show this help message\n");
+        printf("  end                : Exit console task\n\n");
+    }
+    else if (strcmp(cmd, "end") == 0)
+    {
+        printf("Ending command session.\n");
+        return false;
+    }
+    else
+    {
+        printf("Unknown command.\n");
     }
 
-    else if (strcmp(cmd, "name") == 0) {
-        printf("Device name: %s\n", device_name);
-    }
-
-    else if (strncmp(cmd, "setname ", 8) == 0) {
-        char *new_name = cmd + 8;
-
-        if (strlen(new_name) < sizeof(device_name)) {
-            strcpy(device_name, new_name);
-            printf("Device name updated to: %s\n", device_name);
-        } else {
-            printf("Error: name too long (max %d chars)\n",
-                   (int)(sizeof(device_name) - 1));
-        }
-    }
-
-    else {
-        printf("Unknown command. Type 'help'\n");
-    }
+    return true;
 }
 
-// ---- USB Console Task ----
-void usb_console_task(void *arg)
+void consoleTask(void* arg)
 {
-    char rx_buffer[RX_BUF_SIZE];
-    int idx = 0;
+    uint8_t rx_byte;
+    char line_buffer[BUF_SIZE];
+    int index = 0;
 
-    printf("\nUSB Command Interface Ready\n");
-    printf("Type 'help'\n\n");
+    printf("Console ready.\n> ");
+    printf("\nAvailable commands:\n");
+        printf("  set-appkey <value>    : Set appkey string\n");
+        printf("  set-freq <value>   : Set communication frequency (in minutes)\n");
+        printf("  show               : Show current stored values\n");
+        printf("  help               : Show this help message\n");
+        printf("  end                : Exit console task\n\n");
 
-    while (true) {
+    while (true)
+    {
+        int len = usb_serial_jtag_read_bytes(
+            &rx_byte,
+            1,
+            portMAX_DELAY
+        );
 
-        uint8_t c;
-        int len = usb_serial_jtag_read_bytes(&c, 1, 10 / portTICK_PERIOD_MS);
+        if (len > 0)
+        {
+            char c = (char)rx_byte;
 
-        if (len > 0) {
+            // Handle Enter
+            if (c == '\r' || c == '\n')
+            {
+                printf("\r\n");
 
-            if (c == '\r' || c == '\n') {
-                rx_buffer[idx] = '\0';
+                line_buffer[index] = '\0';
 
-                if (idx > 0) {
-                    handle_command(rx_buffer);
-                    idx = 0;
+                if (index > 0)
+                {
+                    if (!processCommand(line_buffer))
+                        break;
+                }
+
+                index = 0;
+                printf("> ");
+            }
+            // Handle Backspace
+            else if (c == 0x7F || c == 0x08)
+            {
+                if (index > 0)
+                {
+                    index--;
+                    printf("\b \b");
                 }
             }
-            else {
-                if (idx < RX_BUF_SIZE - 1) {
-                    rx_buffer[idx++] = c;
+            // Normal character
+            else
+            {
+                if (index < BUF_SIZE - 1)
+                {
+                    line_buffer[index++] = c;
+                    printf("%c", c);  // echo
                 }
             }
         }
-
-        vTaskDelay(1);
     }
-}
 
-bool is_usb_connected(void) {
-    return usb_serial_jtag_is_connected
-    ();
+    printf("\nConsole task ended.\n");
+    vTaskDelete(NULL);
 }
-
+/* ---------------------------------------------------------- */
+/* app_main */
+/* ---------------------------------------------------------- */
 extern "C" void app_main(void)
 {
-    // Install USB Serial JTAG driver
-    usb_serial_jtag_driver_config_t config = {1024, 1024}; // rx_buffer_size, tx_buffer_size
-    usb_serial_jtag_driver_install(&config);
+    Storage::initNVS();
+    loadConfig();
 
-    if (!uart_init()) {
-        ESP_LOGE("MAIN", "UART init failed");
-        return;
+    usb_serial_jtag_driver_config_t config = {1024, 1024};
+usb_serial_jtag_driver_install(&config);
+
+    xTaskCreate(consoleTask, "consoleTask", 4096, NULL, 5, NULL);
+
+    // Prevent app_main from returning
+    while (true)
+    {
+        vTaskDelay(portMAX_DELAY);
     }
-
-    xTaskCreate(
-        usb_console_task,
-        "usb_console",
-        4096,
-        NULL,
-        5,
-        NULL
-    );
-    
-
-    xTaskCreate(uart_task, "uart_task", 4096, nullptr, 10, nullptr);
 }
