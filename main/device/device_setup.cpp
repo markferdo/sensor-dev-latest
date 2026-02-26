@@ -55,7 +55,7 @@ bool uart_init()
 }
 
 
-// Read data from UART.
+// Read data from com port
 #if 0
 int uart_read_line(char *buf, size_t max_len)
 {
@@ -75,7 +75,7 @@ int uart_read_line(char *buf, size_t max_len)
                 buf[index] = '\0';   // terminate string
                 return index;        // return length
             }
-            buf[index++] = byte; // check how this gonna make the final message
+            buf[index++] = byte; 
         }
     }
 
@@ -85,7 +85,7 @@ int uart_read_line(char *buf, size_t max_len)
 
 #endif
 
-// Read from the USB
+// Read from the usb port
 #if 1
 int usb_read_line(char *buf, size_t max_len)
 {
@@ -113,7 +113,7 @@ int usb_read_line(char *buf, size_t max_len)
 DeviceCredentials parse_json(const char* json_str) {
     DeviceCredentials creds;
 
-    cJSON* root = cJSON_Parse(json_str); // check what is root and how it can return a bool
+    cJSON* root = cJSON_Parse(json_str);
     if (!root) {
         ESP_LOGE("JSON", "Failed to parse JSON");
         return creds;
