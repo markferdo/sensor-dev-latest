@@ -1,0 +1,71 @@
+#include "device_setup.h"
+#include "isd-nvs.h"
+#include "driver/uart.h"
+#include "esp_log.h"
+#include "cJSON.h"
+#include <string>
+#include <cstring>
+
+#define UART_PORT_NUM  UART_NUM_1
+#define UART_BAUD_RATE 115200
+#define BUF_SIZE       1024
+#define RD_BUF_SIZE    (BUF_SIZE)
+
+bool fetchDeviceData(DeviceCredentials& creds) {
+    // UART configuration
+    uart_config_t uart_config = {
+        .baud_rate = UART_BAUD_RATE,
+        .data_bits = UART_DATA_8_BITS,
+        .parity    = UART_PARITY_DISABLE,
+        .stop_bits = UART_STOP_BITS_1,
+        .flow_ctrl = UART_HW_FLOWCTRL_DISABLE
+        .rx_flow_ctrl_thresh = 122,
+    };
+
+    // Configure UART parameters
+    if (uart_param_config(UART_PORT_NUM, &uart_config) != ESP_OK) return false;
+
+    // Install UART driver
+    if (uart_driver_install(UART_PORT_NUM, BUF_SIZE * 2, 0, 0, nullptr, 0) != ESP_OK) return false;
+
+    uint8_t* data = (uint8_t*) malloc(RD_BUF_SIZE);
+    if (!data) return false;
+
+    // Wait for data from PC (Python)
+    int len = uart_read_bytes(UART_PORT_NUM, data, RD_BUF_SIZE - 1, pdMS_TO_TICKS(5000)); // 5 sec timeout
+    if (len <= 0) {
+        free(data);
+        return false;
+    }
+
+    data[len] = '\0';
+
+    // Parse JSON
+    cJSON* root = cJSON_Parse((const char*)data);
+    free(data);
+
+    if (!root) return false;
+
+    cJSON* devEui  = cJSON_GetObjectItem(root, "devEui");
+    cJSON* joinEui = cJSON_GetObjectItem(root, "joinEui");
+    cJSON* appKey  = cJSON_GetObjectItem(root, "appKey");
+
+    if (!cJSON_IsString(devEui) || !cJSON_IsString(joinEui) || !cJSON_IsString(appKey)) {
+        cJSON_Delete(root);
+        return false;
+    }
+
+    // Fill struct
+    creds.devEui  = devEui->valuestring;
+    creds.joinEui = joinEui->valuestring;
+    creds.appKey  = appKey->valuestring;
+
+    cJSON_Delete(root);
+
+    ESP_LOGI("DEVICE_SETUP", "Device credentials fetched!");
+    ESP_LOGI("DEVICE_SETUP", "devEui: %s", creds.devEui.c_str());
+    ESP_LOGI("DEVICE_SETUP", "joinEui: %s", creds.joinEui.c_str());
+    ESP_LOGI("DEVICE_SETUP", "appKey: %s", creds.appKey.c_str());
+
+    return true;
+}

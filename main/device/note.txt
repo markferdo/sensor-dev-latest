@@ -1,0 +1,8 @@
+if (!cJSON_IsString(devEui) ||
+        !cJSON_IsString(joinEui) ||
+        !cJSON_IsString(appKey)) {
+
+        ESP_LOGE("JSON", "Missing or invalid fields");
+        cJSON_Delete(root);
+        return creds;
+    }
