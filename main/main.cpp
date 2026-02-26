@@ -99,6 +99,7 @@ extern "C" void app_main(void)
         return;
     }
 
+    #if 0
     xTaskCreate(
         usb_console_task,
         "usb_console",
@@ -107,7 +108,7 @@ extern "C" void app_main(void)
         5,
         NULL
     );
-    
+    #endif
 
     xTaskCreate(uart_task, "uart_task", 4096, nullptr, 10, nullptr);
 }
