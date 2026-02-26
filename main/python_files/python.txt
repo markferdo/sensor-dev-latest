@@ -3,24 +3,55 @@ import serial
 import json
 import time
 
-#response = requests.get("http://<pi-ip>:3000/api/latest-device")
+# Plug the device and run the backend chirpstack server to generate the key. Once it generates the key run the python script to save keys into nvs
+
+#uncomment these two and comment dummy data to fetch keys from the server
+#response = requests.get("http://192.168.112.11:3000//api/latest-device") // replace with your server IP
 #data = response.json()  # devEui, joinEui, appKey
 
-# Testing with fake data
+# Dummy data for testing
 data = {
     "devEui": "ABCDEF1234567890",
     "joinEui": "1122334455667788",
-    "appKey": "AABBCCDDEEFF00112233445566778899"
+    "appKey": "11112222333344445555666677779999"
 }
 
-ser = serial.Serial('/dev/ttyACM0', 115200, timeout=1)
+def run_serial_bridge():
+    keys_sent = False
+    
+    while True:
+        try:
+            print(f"--- Attempting to connect to /dev/ttyACM1 ---")
+            ser = serial.Serial('/dev/ttyACM0', 115200, timeout=0.1)
+            ser.dsrdtr = False
+            ser.rtscts = False
+            ser.setDTR(False)
+            ser.setRTS(False)
 
-ser.write((json.dumps(data) + "\n").encode())
+            print("--- Connected! Listening for logs... ---")
 
-response = ser.readline().decode().strip()
-print("ESP replied:", response)
+            while True:
+                line = ser.readline().decode(errors='ignore').strip()
+                if line:
+                    print(f"[ESP]: {line}")
 
-time.sleep(0.1)
-ser.close()
+                    if "READY_TO_RECEIVE" in line and not keys_sent:
+                        print(">>> Handshake! Sending Keys...")
+                        time.sleep(0.5)
+                        ser.write((json.dumps(data) + "\n").encode('utf-8'))
+                        ser.flush()
+                        keys_sent = True
+                    
+                    if "Read back:" in line:
+                        print("\nSUCCESS!")
 
-print("Sent keys:", data)
+        except (serial.SerialException, OSError):
+            print("--- Device disconnected/reset. Reconnecting in 1s... ---")
+            time.sleep(1)
+            continue
+        except KeyboardInterrupt:
+            print("\nExiting...")
+            break
+
+if __name__ == "__main__":
+    run_serial_bridge()
