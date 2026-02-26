@@ -34,9 +34,6 @@ void uart_task(void *param)
 
 #include "tasks.h"
 #include "device/device_setup.h"
-#include "esp_log.h"
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
 
 #if CONFIG_IDF_TARGET_ESP32C6 || CONFIG_IDF_TARGET_ESP32S3
 //#include "driver/usb_serial_jtag.h"
