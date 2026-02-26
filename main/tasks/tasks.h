@@ -7,4 +7,5 @@
 #include <cstddef>
 
 int uart_read_line(char *buf, size_t max_len);
+int read_line_any(char *buf, size_t max_len);
 void uart_task(void *pvParameters);

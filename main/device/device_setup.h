@@ -4,6 +4,7 @@
 #include "isd-nvs.h"  // For Storage class
 #include "esp_err.h"  // For esp_err_t
 #include "isd-nvs.h"
+#include "driver/usb_serial_jtag.h"
 
 #define UART_PORT_NUM  UART_NUM_0 //esp logs in uart 0
 #define UART_BAUD_RATE 115200
@@ -21,7 +22,10 @@ struct DeviceCredentials {
 };
 
 bool uart_init();   
-int uart_read_line(char *buf, size_t max_len);
+int uart_read_line(char *buf, size_t max_len); // works only with com port
+int usb_read_line(char *buf, size_t max_len);// // works only with usb port
 DeviceCredentials parse_json(const char* json_str);
 void save_keys_to_nvs(const DeviceCredentials& creds);
 void read_keys_from_nvs();
+
+

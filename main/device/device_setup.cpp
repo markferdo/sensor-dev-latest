@@ -56,7 +56,7 @@ bool uart_init()
 
 
 // Read data from UART.
-
+#if 0
 int uart_read_line(char *buf, size_t max_len)
 {
     size_t index = 0;
@@ -83,7 +83,32 @@ int uart_read_line(char *buf, size_t max_len)
     return index;
 }
 
+#endif
 
+// Read from the USB
+#if 1
+int usb_read_line(char *buf, size_t max_len)
+{
+    size_t index = 0;
+
+    while (index < max_len - 1) {
+        uint8_t byte;
+        int len = usb_serial_jtag_read_bytes(&byte, 1, pdMS_TO_TICKS(500));
+
+        if (len > 0) {
+            if (byte == '\r') continue; 
+            if (byte == '\n') {
+                buf[index] = '\0';
+                return (int)index;
+            }
+            buf[index++] = (char)byte;
+        }
+    }
+
+    buf[max_len - 1] = '\0';
+    return (int)index;
+}
+#endif
 
 DeviceCredentials parse_json(const char* json_str) {
     DeviceCredentials creds;
